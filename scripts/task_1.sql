@@ -210,3 +210,35 @@ GROUP BY h.hub_id,h.hub_name
 ORDER BY h.hub_id;
 
 --Q5. High-return agents
+SELECT a.agent_id,
+a.agent_name,
+a.salary_type,
+a.joining_date,
+h.hub_id,
+h.hub_name,
+DATE '2026-10-26'- a.joining_date AS tenure_days,
+COUNT(*) AS attempts,
+COUNT(*) FILTER (WHERE t.outcome='Returned') AS returned,
+ROUND(100* COUNT(*) FILTER (WHERE t.outcome='Returned')/NULLIF(COUNT(*),0),2) AS return_pct
+FROM attempt AS t
+JOIN agents AS a 
+USING(agent_id)
+JOIN hubs AS h 
+ON h.hub_id=a.hub_id
+
+WHERE DATE '2026-10-26' -a.joining_date >30
+AND a.active_status='Active'
+
+GROUP BY a.agent_id,
+a.agent_name,
+a.salary_type,
+a.joining_date,
+h.hub_id,
+h.hub_name
+HAVING
+    100.0 * COUNT(*) FILTER (
+        WHERE t.outcome = 'Returned'
+    ) / NULLIF(COUNT(*), 2) > 15
+
+ORDER BY return_pct DESC;
+--Q6. Cost per delivered order
