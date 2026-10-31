@@ -242,3 +242,81 @@ HAVING
 
 ORDER BY return_pct DESC;
 --Q6. Cost per delivered order
+
+-- Q7: Required Agents and Staffing Gap for 4 Forecast Weeks
+WITH historical_apo AS (
+    -- Calculate historical attempts per order for each hub
+    SELECT
+        o.hub_id,
+        COUNT(*)::numeric /
+            NULLIF(COUNT(DISTINCT l.order_id), 0) AS attempts_per_order
+    FROM orders o
+    JOIN order_logs l
+        ON o.order_id = l.order_id
+    WHERE l.status = 'Assigned'
+      AND l.event_time::date
+          BETWEEN DATE '2026-10-13' AND DATE '2026-10-26'
+    GROUP BY o.hub_id
+),
+
+active_agents AS (
+    -- Count currently active agents in each hub
+    SELECT
+        hub_id,
+        COUNT(*) AS active_agents
+    FROM agents
+    WHERE active_status = 'Active'
+    GROUP BY hub_id
+),
+
+staffing AS (
+    -- Calculate required agents for each forecast week
+    SELECT
+        f.hub_id,
+        f.week_start,
+        f.week_end,
+        f.expected_orders,
+        apo.attempts_per_order,
+        COALESCE(a.active_agents, 0) AS active_agents,
+
+        CEIL(
+            f.expected_orders * apo.attempts_per_order
+            / (7 * 40 * 0.85)
+        ) AS required_agents
+
+    FROM volume_forecast f
+    JOIN historical_apo apo
+        ON f.hub_id = apo.hub_id
+    LEFT JOIN active_agents a
+        ON f.hub_id = a.hub_id
+)
+
+SELECT
+    h.hub_id,
+    h.hub_name,
+    s.week_start,
+    s.week_end,
+    s.expected_orders,
+
+    ROUND(s.attempts_per_order, 3) AS attempts_per_order,
+
+    CEIL(
+        s.expected_orders * s.attempts_per_order
+        / 238.0
+    ) AS required_agents,
+
+    s.active_agents,
+
+    CEIL(
+        s.expected_orders * s.attempts_per_order
+        / 238.0
+    ) - s.active_agents AS staffing_gap
+
+FROM staffing s
+JOIN hubs h
+    ON s.hub_id = h.hub_id
+
+ORDER BY
+    h.hub_id,
+	h.hub_name,
+    s.week_start;
