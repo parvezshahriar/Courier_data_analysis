@@ -131,3 +131,51 @@ JOIN hubs h
     USING (hub_id)
 
 ORDER BY h.hub_id, c.week_no;
+
+--Q3. Week 2 hold reasons
+WITH hub AS(
+ SELECT hub_id,
+ hold_reason,
+ BOOL_OR(agent_side) AS agent_side,
+ COUNT(*) AS n
+ FROM attempt
+ WHERE week_no=2
+ AND outcome='Hold'
+ GROUP BY hub_id,hold_reason
+),
+total AS(
+SELECT hub_id,
+SUM(n) AS total_hold,
+ROUND(
+   100.0 * SUM(n) FILTER (WHERE agent_side) /
+   NULLIF(SUM(n), 0),1)AS agent_side_pct
+FROM hub
+GROUP BY hub_id
+),
+ranked AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY hub_id
+            ORDER BY n DESC, hold_reason
+        ) AS rn
+    FROM hub
+)
+
+SELECT h.hub_id, 
+h.hub_name,
+t.total_hold,
+t.agent_side_pct,
+MAX(hold_reason) FILTER(WHERE rn=1) AS top_reason_1,
+MAX(n) FILTER (WHERE rn=1) AS top_1_count,
+MAX(hold_reason) FILTER(WHERE rn=2) AS top_reason_2,
+MAX(n) FILTER (WHERE rn=2) AS top_2_count
+FROM ranked r
+JOIN total AS t
+USING(hub_id)
+JOIN hubs AS h
+USING (hub_id)
+GROUP BY h.hub_id,h.hub_name,t.total_hold,t.agent_side_pct
+ORDER BY h.hub_id;
+
+--Q4. Outcome of held orders
