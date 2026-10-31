@@ -35,7 +35,7 @@ USING (order_id,attempt_no)
 JOIN agents AS ag 
 USING(agent_id);
 
--- Working day = a day on which the agent had at least one attempt.
+-- Q1.Working day = a day on which the agent had at least one attempt.
 
 DROP TABLE IF EXISTs daily_agent;
 CREATE TABLE daily_agent AS
@@ -53,3 +53,81 @@ GROUP BY agent_id,agent_name,hub_id,attempt_date;
 select * from daily_agent 
 ORDER BY attempt_date,agent_id
 LIMIT 20;
+
+--Q2. Utilisation, Week 1 vs Week 2
+WITH days AS (
+    SELECT generate_series(
+        DATE '2026-10-13',
+        DATE '2026-10-26',
+        INTERVAL '1 day'
+    )::date AS work_date
+),
+
+capacity AS (
+    SELECT
+        a.hub_id,
+        CASE
+            WHEN d.work_date <= DATE '2026-10-19' THEN 1
+            ELSE 2
+        END AS week_no,
+        COUNT(*) AS agent_days
+    FROM agents a
+    JOIN days d
+        ON d.work_date >= a.joining_date
+       AND (
+            a.active_status = 'Active'
+            OR d.work_date <= DATE '2026-10-19'
+       )
+    GROUP BY
+        a.hub_id,
+        CASE
+            WHEN d.work_date <= DATE '2026-10-19' THEN 1
+            ELSE 2
+        END
+),
+
+attempt_counts AS (
+    SELECT
+        hub_id,
+        week_no,
+        COUNT(*) AS attempts
+    FROM attempt
+    GROUP BY hub_id, week_no
+)
+
+SELECT
+    h.hub_name,
+	h.hub_id,
+	h.cluster,
+    c.week_no,
+    COALESCE(ac.attempts, 0) AS attempts,
+    c.agent_days,
+    c.agent_days * 40 AS capacity,
+
+    ROUND(
+        COALESCE(ac.attempts, 0) * 100.0 /
+        NULLIF(c.agent_days * 40, 0),
+        2
+    ) AS utilisation_pct,
+
+    CASE
+        WHEN c.week_no = 2
+         AND COALESCE(ac.attempts, 0) >
+             c.agent_days * 40 * 0.85
+        THEN 'ABOVE TARGET (>85%)'
+		WHEN c.week_no = 2
+         AND COALESCE(ac.attempts, 0) <
+             c.agent_days * 40 * 0.85
+        THEN 'WITHIN TARGET (<=85%)'
+        ELSE NULL
+    END AS flag
+
+FROM capacity c
+
+LEFT JOIN attempt_counts ac
+    USING (hub_id, week_no)
+
+JOIN hubs h
+    USING (hub_id)
+
+ORDER BY h.hub_id, c.week_no;
