@@ -179,3 +179,34 @@ GROUP BY h.hub_id,h.hub_name,t.total_hold,t.agent_side_pct
 ORDER BY h.hub_id;
 
 --Q4. Outcome of held orders
+WITH held AS(
+SELECT DISTINCT order_id
+from attempt
+where outcome='Hold'
+)
+SELECT h.hub_name,h.hub_id,
+COUNT(*) AS held_orders,
+COUNT(*) FILTER (WHERE o.final_status = 'Delivered') AS finally_delivered,
+    COUNT(*) FILTER (WHERE o.final_status = 'Returned') AS finally_returned,
+    COUNT(*) FILTER (WHERE o.final_status = 'Hold') AS still_on_hold,
+ROUND(
+  100.0* COUNT(*) FILTER(WHERE o.final_status='Delivered')
+  /NULLIF(COUNT(*),0),1) AS delivered_pct,
+
+ ROUND(
+  100.0* COUNT(*) FILTER(WHERE o.final_status='Returned')
+  /NULLIF(COUNT(*),0),1) AS returned_pct,
+
+ ROUND(
+  100.0* COUNT(*) FILTER(WHERE o.final_status='Hold')
+  /NULLIF(COUNT(*),0),1) AS hold_pct
+
+FROM held
+JOIN orders AS o
+USING(order_id)
+JOIN hubs AS h
+USING(hub_id)
+GROUP BY h.hub_id,h.hub_name
+ORDER BY h.hub_id;
+
+--Q5. High-return agents
