@@ -1,0 +1,9 @@
+rule,value
+Standard attempts per agent per day,40
+Target utilisation,0.85
+Working days per month,26
+New agent speed in first 7 days,0.6
+Hold programme removes agent-side holds,0.5
+Days for the hold programme to reach full effect,14
+Agents move only within the same cluster,Yes
+"Agents move only out of hubs whose Week 2 utilisation, before the move, is below",0.75

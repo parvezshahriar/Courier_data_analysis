@@ -1,0 +1,6 @@
+what,amount_bdt,when_charged
+A hold,30,Every hold
+A return,55,Every return
+Hiring a new agent,5000,"Once per agent, on top of salary"
+Moving an agent to another hub,2000,Once per agent
+Hold reduction programme,15000,Once per hub
