@@ -54,6 +54,20 @@ select * from daily_agent
 ORDER BY attempt_date,agent_id
 LIMIT 20;
 
+SELECT 
+       h.hub_id,
+	   h.cluster,
+       h.hub_name,
+       COUNT(*) AS agent_days,
+	   SUM(d.assigned) AS total_assigned,
+       SUM(d.delivered) AS total_delivered,
+       SUM(d.holds) AS total_hold,
+       SUM(d.returned) AS total_returned,
+       COUNT(DISTINCT(d.agent_id)) AS available_agent_days,
+       ROUND(AVG(d.delivered), 2) AS avg_deliveries_per_agent_day
+FROM daily_agent d JOIN hubs h USING (hub_id)
+GROUP BY h.hub_id,h.hub_name ORDER BY h.hub_id;
+
 --Q2. Utilisation, Week 1 vs Week 2
 WITH days AS (
     SELECT generate_series(
