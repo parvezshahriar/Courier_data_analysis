@@ -256,7 +256,102 @@ HAVING
 
 ORDER BY return_pct DESC;
 --Q6. Cost per delivered order
+WITH agent_weekly AS (
+    SELECT
+        d.hub_id,
+        d.agent_id,
+        CASE
+            WHEN d.attempt_date <= DATE '2026-10-19' THEN 1
+            ELSE 2
+        END AS week_no,
+        COUNT(*) AS worked_days,
+        SUM(d.delivered) AS delivered,
+        SUM(d.holds) AS total_holds,
+        SUM(d.returned) AS total_returns
+    FROM daily_agent d
+    WHERE d.attempt_date BETWEEN
+          DATE '2026-10-13' AND DATE '2026-10-26'
+    GROUP BY
+        d.hub_id,
+        d.agent_id,
+        CASE
+            WHEN d.attempt_date <= DATE '2026-10-19' THEN 1
+            ELSE 2
+        END
+),
 
+daily_costs AS (
+    SELECT
+        aw.hub_id,
+        aw.week_no,
+
+        SUM(aw.delivered) AS delivered,
+        SUM(aw.total_holds) AS total_holds,
+        SUM(aw.total_returns) AS total_returns,
+
+        SUM(
+            CASE
+                WHEN a.salary_type = 'Fixed'
+                THEN aw.worked_days * (s.monthly_salary / 26.0)
+                ELSE 0
+            END
+        ) AS fixed_salary_cost,
+
+        SUM(
+            CASE
+                WHEN a.salary_type = 'Variable'
+                THEN
+                    aw.worked_days * s.daily_allowance
+                    + aw.delivered * s.allowance_per_delivery
+                ELSE 0
+            END
+        ) AS variable_pay_cost
+
+    FROM agent_weekly aw
+    JOIN agents a ON aw.agent_id = a.agent_id
+    JOIN agent_salary s ON a.salary_type = s.salary_type
+
+    GROUP BY aw.hub_id, aw.week_no
+),
+
+hub_costs AS (
+    SELECT *,
+        fixed_salary_cost + variable_pay_cost AS labor_cost,
+        total_holds * 30 AS hold_penalty_cost,
+        total_returns * 55 AS return_penalty_cost
+    FROM daily_costs
+),
+
+final_costs AS (
+    SELECT *,
+        labor_cost + hold_penalty_cost + return_penalty_cost
+            AS total_operational_cost
+    FROM hub_costs
+)
+
+SELECT
+    h.hub_id,
+    h.hub_name,
+    'Week ' || f.week_no AS week,
+    f.delivered AS delivered_orders,
+    ROUND(f.fixed_salary_cost, 2) AS fixed_salary_cost,
+    ROUND(f.variable_pay_cost, 2) AS variable_pay_cost,
+    ROUND(f.labor_cost, 2) AS total_labor_cost,
+    f.total_holds,
+    ROUND(f.hold_penalty_cost, 2) AS hold_penalty_cost,
+    f.total_returns,
+    ROUND(f.return_penalty_cost, 2) AS return_penalty_cost,
+    ROUND(f.total_operational_cost, 2) AS total_hub_cost,
+    ROUND(
+        f.labor_cost / NULLIF(f.delivered, 0), 2
+    ) AS cpd_labor_only_bdt,
+    ROUND(
+        f.total_operational_cost / NULLIF(f.delivered, 0), 2
+    ) AS cpd_total_operational_bdt
+
+FROM final_costs f
+JOIN hubs h ON f.hub_id = h.hub_id
+ORDER BY h.hub_id, f.week_no;
 -- Q7: Required Agents and Staffing Gap for 4 Forecast Weeks
 WITH historical_apo AS (
     -- Calculate historical attempts per order for each hub
